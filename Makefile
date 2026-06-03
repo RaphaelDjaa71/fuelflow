@@ -16,6 +16,9 @@ test:
 ingest-local:
 	PYTHONPATH=ingestion uv run python -m fuelflow_ingest.cli --local-only
 
+ingest-gcs:
+	set -a && . ./.env && set +a && PYTHONPATH=ingestion uv run python -m fuelflow_ingest.cli
+
 audit-source:
 	uv run python ingestion/scripts/inspect_source.py
 
