@@ -2,7 +2,7 @@
 
 **Lot responsable :** L3 (staging) → L4 (intermediate) → L5 (gold + contracts).
 
-**Statut L3 :** ✅ Staging + tests verts sur BigQuery (13/13).
+**Statut L3 :** ✅ Staging + tests verts **sur les deux warehouses**, audits Snowflake et BigQuery identiques.
 
 ## Structure
 
@@ -37,16 +37,29 @@ transform/
 secret committé. En L7 la CI utilisera une clé du SA `fuelflow-ci` chargée
 depuis GitHub Actions Secrets.
 
-### Snowflake (dev local)
-`authenticator: externalbrowser` → un onglet de navigateur s'ouvre à chaque
-`dbt build --target snowflake` pour le challenge MFA. Pas de password
-stocké en `profiles.yml` quand cet authenticator est utilisé.
+### Snowflake — **key-pair JWT** (dev local + CI L7)
+`authenticator: jwt` + `private_key_path` pointant sur
+`.secrets/snowflake_rsa_key.p8` (gitigné). Aucun mot de passe dans
+`profiles.yml`, aucun prompt MFA à chaque run (la clé privée seule
+fait foi).
 
-> **CI Snowflake = L7.** Pour automatiser dbt sur Snowflake dans GitHub
-> Actions, il faudra basculer en **key-pair authentication** :
-> `ALTER USER … SET RSA_PUBLIC_KEY = '…'` côté SF + clé privée en
-> GitHub Secret, profile `authenticator: snowflake_jwt` + `private_key_path`.
-> Hors scope L3.
+Set-up déjà fait pour le user `RAPHAELDJAA` :
+```bash
+# clé générée localement (sans passphrase pour MVP) :
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM \
+  -out .secrets/snowflake_rsa_key.p8 -nocrypt
+openssl rsa -in .secrets/snowflake_rsa_key.p8 -pubout \
+  -out .secrets/snowflake_rsa_key.pub
+# clé publique enregistrée côté Snowflake :
+#   USE ROLE ACCOUNTADMIN;
+#   ALTER USER RAPHAELDJAA SET RSA_PUBLIC_KEY = '<pubkey>';
+```
+> Le détour par MFA (Snowsight UI / `externalbrowser` / `username_password_mfa`)
+> a été écarté en L3 : le trial Snowflake n'a pas SAML IdP configuré
+> (externalbrowser KO) et la méthode MFA disponible
+> ("none of your current MFA methods are supported for programmatic
+> authentication") n'est pas exploitable depuis le connecteur Python.
+> Key-pair est la voie propre et c'est ce que la CI utilisera en L7.
 
 ## Modèle de staging — `stg_prix`
 
@@ -79,15 +92,51 @@ Transformations appliquées :
 | `dbt_utils.unique_combination_of_columns` | (station_id, carburant_id, maj_timestamp_utc) | error |
 | `dbt_utils.expression_is_true` (BETWEEN 0.5 AND 3.5) | prix_euro | **warn** (donnée source, n'arrête pas la CI) |
 
-## Audit empirique L3 sur BigQuery
+## Audit empirique L3 — Snowflake et BigQuery, identiques
 
+| Métrique | BigQuery | Snowflake |
+|---|---|---|
+| `row_count` | 32 666 | 32 666 |
+| `distinct prix_sk` | 32 666 | 32 666 |
+| `prix_min` / `prix_max` | 0.699 / 2.89 | 0.699 / 2.89 |
+| `lat_min` / `lat_max` | 41.391 / 51.065 | 41.391 / 51.065 |
+| `lon_min` / `lon_max` | -4.723 / 9.547 | -4.723 / 9.547 |
+| `distinct station_id` | 9 608 | 9 608 |
+| `maj_min` (UTC) | 2024-05-24 08:17:53 | 2024-05-24 08:17:53 |
+| `maj_max` (UTC) | 2026-06-03 21:30:00 | 2026-06-03 21:30:00 |
+
+Le grain et la conversion Paris→UTC sont parfaitement reproductibles
+sur les deux moteurs.
+
+### Sortie `dbt build --target snowflake`
 ```
-row_count: 32 666 | distinct_keys: 32 666 (zero collision sur ce snapshot)
-maj_min: 2024-05-24 08:17:53 UTC | maj_max: 2026-06-03 21:30:00 UTC
-prix ∈ [0.699 ; 2.89]
+Found 1 model, 12 data tests, 1 source, 652 macros
+Concurrency: 4 threads (target='snowflake')
+...
+Completed successfully
+Done. PASS=13 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=13
 ```
 
-Match exact avec `ext_prix_bronze` (L2).
+### Sortie `dbt build --target bigquery`
+```
+Found 1 model, 12 data tests, 1 source, ...
+Concurrency: 4 threads (target='bigquery')
+...
+Completed successfully
+Done. PASS=13 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=13
+```
+
+### Piège timestamp Snowflake — corrigé en L2
+La closure Snowflake a révélé que `maj_timestamp` (polars
+`Datetime[us]` naïf → Parquet `TIMESTAMP(MICROS)`) était lu par
+Snowflake comme un entier de microsecondes mais cast en `TIMESTAMP_NTZ`
+en l'interprétant comme **secondes**, produisant des années en
+54 millions. Les tests `not_null` / `unique` ne détectaient pas
+l'anomalie. Fix appliqué à `infra/snowflake/03_stage_external_table.sql` :
+remplacement de `VALUE:maj_timestamp::TIMESTAMP_NTZ` par
+`TO_TIMESTAMP_NTZ(VALUE:maj_timestamp::NUMBER, 6)` (scale=6 = micro).
+`ingestion_ts` arrive en ISO-8601 (polars `Datetime[us, UTC]`) et n'est
+pas affecté.
 
 ## Pour rejouer en local
 
