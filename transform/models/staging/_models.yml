@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: stg_prix
+    description: |
+      Typed + UTC-normalized + deduplicated view over ext_prix_bronze.
+      One row per (station_id, carburant_id, maj_timestamp_utc).
+      prix_sk is a surrogate hash of the natural key, stable across
+      Snowflake and BigQuery (dbt_utils.generate_surrogate_key uses md5
+      of the concatenated values).
+    columns:
+      - name: prix_sk
+        description: Surrogate key — md5(station_id || carburant_id || maj_timestamp_utc).
+        data_tests:
+          - not_null
+          - unique
+      - name: station_id
+        description: Natural station id from source.
+        data_tests:
+          - not_null
+      - name: carburant_id
+        description: Fuel id from source.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['1', '2', '3', '4', '5', '6']
+      - name: carburant_nom
+        description: Human-readable fuel label.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc']
+      - name: maj_timestamp_utc
+        description: Source update timestamp, converted to UTC.
+        data_tests:
+          - not_null
+      - name: prix_euro
+        description: Decimal-euro price as published by the station.
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0.5 and 3.5"
+              config:
+                severity: warn
+      - name: ingestion_ts
+        description: UTC capture timestamp.
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - station_id
+              - carburant_id
+              - maj_timestamp_utc
