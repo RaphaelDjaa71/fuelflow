@@ -1,0 +1,34 @@
+version: 2
+
+sources:
+  - name: roulez_eco
+    description: |
+      External tables (L2) over the bronze Parquet layer in GCS. Each row
+      is one (station, fuel, maj_timestamp) record as emitted by the L1
+      ingestion worker. No cleaning happens at this layer.
+    database: "{% if target.name == 'bigquery' %}fuelflow-498320{% else %}FUELFLOW{% endif %}"
+    schema: "{% if target.name == 'bigquery' %}fuelflow_bronze_ext{% else %}BRONZE_EXT{% endif %}"
+
+    tables:
+      - name: ext_prix_bronze
+        description: |
+          External table over gs://fuelflow-498320-bronze/bronze/parquet/.
+          Hive-partitioned by (dt, hh) on BigQuery; pattern-matched on
+          Snowflake. The L1 worker writes new partitions every ingestion run.
+        loaded_at_field: ingestion_ts
+        freshness:
+          warn_after: {count: 90, period: minute}
+          error_after: {count: 6, period: hour}
+        columns:
+          - name: station_id
+            description: Natural key from <pdv id="...">. Stable across runs.
+          - name: carburant_id
+            description: Fuel id (1=Gazole, 2=SP95, 3=E85, 4=GPLc, 5=E10, 6=SP98).
+          - name: maj_timestamp
+            description: |
+              Last-update timestamp from the source, NAIVE Europe/Paris
+              local time. Staging converts it to UTC.
+          - name: prix_euro
+            description: Price in decimal euros (no /1000 conversion needed).
+          - name: ingestion_ts
+            description: UTC timestamp of when the L1 worker captured the row.
