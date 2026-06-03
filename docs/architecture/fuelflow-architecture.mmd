@@ -1,0 +1,21 @@
+flowchart TD
+    SRC["Source open data<br/>donnees.roulez-eco.fr<br/>XML-ZIP, MAJ ~10 min"]
+    ING["Cloud Run Job (Python)<br/>déclenché par Cloud Scheduler<br/>micro-batch HORAIRE"]
+    GCS["GCS bronze<br/>XML brut + Parquet typé<br/>partitionné par date d'ingestion"]
+    SF["Snowflake (région GCP)<br/>warehouse PRINCIPAL<br/>XS + auto-suspend"]
+    BQ["BigQuery silver/gold<br/>démo LIVE durable<br/>free tier"]
+    DBT["dbt Core<br/>staging -> intermediate -> gold<br/>targets: snowflake | bigquery"]
+    TEST["dbt tests + model contracts<br/>+ freshness checks"]
+    PBI["Power BI<br/>case study (← Snowflake)"]
+    LS["Looker Studio<br/>carte/KPIs live (← BigQuery)"]
+    CI["GitHub Actions<br/>dbt build BLOQUANT (target bigquery)"]
+
+    SRC --> ING --> GCS
+    GCS --> SF
+    GCS --> BQ
+    SF --> DBT
+    BQ --> DBT
+    DBT --> TEST
+    SF --> PBI
+    BQ --> LS
+    CI -. bloque le merge si un test échoue .-> DBT
