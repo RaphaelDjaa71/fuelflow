@@ -1,0 +1,21 @@
+-- FuelFlow Snowflake bootstrap.
+-- Run as a user with at least the SYSADMIN role (or equivalent).
+-- The cost guardrail is the warehouse config: XSMALL + AUTO_SUSPEND=60s
+-- (matches the L2 budget posture; see ADR 0002).
+
+USE ROLE SYSADMIN;
+
+CREATE DATABASE IF NOT EXISTS FUELFLOW;
+
+CREATE SCHEMA IF NOT EXISTS FUELFLOW.BRONZE_EXT;
+CREATE SCHEMA IF NOT EXISTS FUELFLOW.SILVER;
+CREATE SCHEMA IF NOT EXISTS FUELFLOW.GOLD;
+
+CREATE WAREHOUSE IF NOT EXISTS FUELFLOW_WH
+  WAREHOUSE_SIZE = XSMALL
+  AUTO_SUSPEND = 60
+  AUTO_RESUME = TRUE
+  INITIALLY_SUSPENDED = TRUE
+  COMMENT = 'FuelFlow analytics warehouse — XSMALL, suspend after 60s of idle';
+
+SHOW WAREHOUSES LIKE 'FUELFLOW_WH';
