@@ -13,3 +13,4 @@ logs/
 gcp-key*.json
 *service-account*.json
 .DS_Store
+data/
