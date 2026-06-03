@@ -14,3 +14,6 @@ gcp-key*.json
 *service-account*.json
 .DS_Store
 data/
+transform/profiles.yml
+transform/.user.yml
+transform/logs/
