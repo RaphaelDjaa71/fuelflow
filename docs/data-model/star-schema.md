@@ -58,6 +58,14 @@ Test dbt `unique(prix_sk)` doit toujours passer.
 > appliquée (le commentaire historique « millièmes d'euros » est
 > obsolète sur le flux courant). Le bronze stocke un `Float64`
 > arrondi à 3 décimales ; le contract gold remonte en `NUMERIC(10,3)`.
+>
+> **Décision L5 — sévérité du test de plage** : le test
+> `prix_euro BETWEEN 0.5 AND 3.5` est implémenté en **sévérité `warn`**,
+> pas `error`. Raison : la valeur est une donnée source que nous ne
+> contrôlons pas ; une station qui publie une valeur hors plage (saisie
+> erronée, promotion, GPLc à 0,7 €) doit alerter mais **ne doit pas
+> casser le build CI**. Les tests `not_null`, `unique` et le contract
+> lui-même restent en `error` (drift de schéma = fail bloquant).
 
 **Index implicite / clustering** :
 - Snowflake : clustering sur `(ingestion_date, station_sk)`.
