@@ -90,6 +90,16 @@ dbt portable entre deux warehouses cloud.
 
 ## 8. Démarrer en local
 
+**Prérequis** :
+- Python `>= 3.12` (géré automatiquement par uv)
+- [`uv`](https://docs.astral.sh/uv/) `>= 0.5` (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- `git >= 2.30` — les hooks pre-commit utilisent `git fetch --filter=blob:none`,
+  pas supporté par git < 2.20. Si le `git` système est ancien (cas typique sur
+  macOS : `/usr/local/bin/git` peut dater de 2017), installer `brew install git`
+  et s'assurer que `/opt/homebrew/bin` (Apple Silicon) ou
+  `/usr/local/bin` (Intel, brew récent) précède `/usr/local/bin` (Apple) dans le `PATH`.
+- `node >= 18` + `npx` (pour `make diagram`, qui appelle `@mermaid-js/mermaid-cli`).
+
 ```bash
 git clone https://github.com/RaphaelDjaa71/fuelflow.git
 cd fuelflow
