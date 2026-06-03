@@ -48,9 +48,16 @@ Test dbt `unique(prix_sk)` doit toujours passer.
 | `carburant_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `not_null`, FK → `dim_carburant.carburant_sk` |
 | `date_sk` | INT | `NUMBER(8,0)` | `INT64` | non | `not_null`, FK → `dim_date.date_sk` (format YYYYMMDD) |
 | `localisation_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `not_null`, FK → `dim_localisation.localisation_sk` |
-| `prix_euro` | NUMERIC(10,3) | `NUMBER(10,3)` | `NUMERIC` | non | `not_null`, `prix_euro > 0` (test custom) |
+| `prix_euro` | NUMERIC(10,3) | `NUMBER(10,3)` | `NUMERIC` | non | `not_null`, `prix_euro BETWEEN 0.5 AND 3.5` (test custom, plage plausible carburants FR) |
 | `maj_timestamp` | TIMESTAMP | `TIMESTAMP_NTZ` | `TIMESTAMP` | non | `not_null` |
 | `ingestion_date` | DATE | `DATE` | `DATE` | non | `not_null` |
+
+> **Note d'unité (audit L1)** : la source `donnees.roulez-eco.fr` expose
+> aujourd'hui le champ `<prix valeur="...">` directement en **euros
+> décimaux** (ex. `valeur="1.957"`). Aucune conversion `÷1000` n'est
+> appliquée (le commentaire historique « millièmes d'euros » est
+> obsolète sur le flux courant). Le bronze stocke un `Float64`
+> arrondi à 3 décimales ; le contract gold remonte en `NUMERIC(10,3)`.
 
 **Index implicite / clustering** :
 - Snowflake : clustering sur `(ingestion_date, station_sk)`.
@@ -65,7 +72,15 @@ Test dbt `unique(prix_sk)` doit toujours passer.
 | `latitude` | NUMERIC(9,6) | `NUMBER(9,6)` | `NUMERIC` | oui | `latitude BETWEEN 41 AND 52` (FR métropole, test custom) |
 | `longitude` | NUMERIC(9,6) | `NUMBER(9,6)` | `NUMERIC` | oui | `longitude BETWEEN -5 AND 10` |
 | `adresse` | STRING | `VARCHAR(500)` | `STRING` | oui | — |
-| `marque` | STRING | `VARCHAR(50)` | `STRING` | oui | — (libellé enseigne quand disponible) |
+| `cp` | STRING(5) | `VARCHAR(5)` | `STRING` | oui | code postal source (5 caractères, zéros de tête préservés) |
+| `pop` | STRING(1) | `VARCHAR(1)` | `STRING` | oui | `accepted_values: ['R', 'A']` (Route / Autoroute) |
+
+> **Marque / nom enseigne : hors scope de la source open data.** Le flux
+> `donnees.roulez-eco.fr` (vérifié L1) n'expose ni le nom commercial ni
+> la marque/enseigne des stations. Un enrichissement (Total / Shell /
+> Esso...) nécessiterait un référentiel externe (web-scrape, base
+> tierce) — non traité dans FuelFlow. Documenté ici pour qu'un futur
+> contributeur ne crée pas la colonne par erreur.
 
 **Décision SCD** : **Type 1** par défaut (overwrite). Justification dans
 ADR 0006. Reconsidérer en L4 si un cas analytique le requiert.
