@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FuelFlow — case study Analytics Engineer · Raphaël DJAA</title>
+  <meta name="description" content="Pipeline analytique sur l'open data des prix carburants en France : contrats de schéma, CI bloquante prouvée, ingestion autonome, dual-warehouse Snowflake + BigQuery." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --ink: #0f1115;
+      --paper: #f6f3ec;
+      --paper-dim: #ece6d6;
+      --rule: #1a1c22;
+      --accent: #a8442a;
+      --accent-soft: #c4663d;
+      --muted: #4c4d54;
+      --good: #2f6b3e;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 18% -10%, rgba(168, 68, 42, 0.06), transparent 55%),
+        radial-gradient(ellipse at 95% 110%, rgba(15, 17, 21, 0.04), transparent 55%),
+        var(--paper);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 4rem 2rem 6rem;
+    }
+
+    /* ---------- header ---------- */
+
+    header.hero {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 2rem;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 2.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .kicker {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    h1.title {
+      font-family: "Fraunces", "Times New Roman", serif;
+      font-weight: 500;
+      font-variation-settings: "opsz" 144;
+      font-size: clamp(2.4rem, 5.5vw, 4rem);
+      line-height: 1.02;
+      letter-spacing: -0.01em;
+      margin: 0 0 0.6rem;
+    }
+
+    h1.title em {
+      font-style: italic;
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    .subtitle {
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+      color: var(--muted);
+      max-width: 50ch;
+      margin: 0;
+    }
+
+    .meta {
+      text-align: right;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .meta a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+    .meta a:hover { color: var(--accent); }
+
+    /* ---------- synopsis ---------- */
+
+    .synopsis {
+      font-family: "Fraunces", serif;
+      font-size: clamp(1.15rem, 1.8vw, 1.4rem);
+      line-height: 1.55;
+      font-weight: 400;
+      color: var(--ink);
+      max-width: 60ch;
+      margin: 0 0 4rem;
+    }
+
+    .synopsis::first-letter {
+      font-family: "Fraunces", serif;
+      font-weight: 700;
+      font-size: 4.2rem;
+      float: left;
+      line-height: 0.88;
+      margin: 0.18em 0.12em 0 0;
+      color: var(--accent);
+    }
+
+    /* ---------- sections ---------- */
+
+    section.chapter {
+      margin-bottom: 4.5rem;
+    }
+
+    .chapter-head {
+      display: grid;
+      grid-template-columns: 4.5rem 1fr;
+      gap: 1rem;
+      align-items: baseline;
+      margin-bottom: 2rem;
+      border-top: 1px solid var(--rule);
+      padding-top: 1.5rem;
+    }
+
+    .chapter-num {
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 2.4rem;
+      line-height: 1;
+      color: var(--accent);
+    }
+
+    h2.chapter-title {
+      font-family: "Fraunces", serif;
+      font-weight: 500;
+      font-size: clamp(1.6rem, 2.8vw, 2.1rem);
+      letter-spacing: -0.005em;
+      line-height: 1.15;
+      margin: 0;
+    }
+
+    .chapter-body p {
+      max-width: 60ch;
+      margin: 0 0 1.2rem;
+    }
+
+    .chapter-body strong { font-weight: 600; }
+
+    /* ---------- pull quote ---------- */
+
+    .pull {
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+      line-height: 1.35;
+      color: var(--ink);
+      max-width: 36ch;
+      margin: 2.5rem auto;
+      padding: 0 1rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .pull::before, .pull::after {
+      content: "";
+      display: block;
+      width: 2rem;
+      height: 1px;
+      background: var(--accent);
+      margin: 1rem auto;
+    }
+
+    /* ---------- architecture image ---------- */
+
+    .architecture {
+      margin: 2rem 0;
+      padding: 1.5rem;
+      background: var(--paper-dim);
+      border: 1px solid var(--rule);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+
+    .architecture img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .architecture figcaption {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 1rem;
+      text-align: center;
+    }
+
+    /* ---------- decisions table ---------- */
+
+    table.decisions {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 1.5rem 0;
+    }
+
+    table.decisions th, table.decisions td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--rule);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    table.decisions th {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.74rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      border-bottom: 2px solid var(--rule);
+    }
+
+    table.decisions td:first-child {
+      font-family: "Fraunces", serif;
+      font-weight: 500;
+      width: 26%;
+    }
+
+    /* ---------- results metrics ---------- */
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .metric {
+      padding: 1.4rem 1.2rem;
+      background: var(--paper-dim);
+      border-left: 3px solid var(--accent);
+    }
+
+    .metric .value {
+      font-family: "Fraunces", serif;
+      font-weight: 700;
+      font-size: 2rem;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.4rem;
+    }
+
+    .metric .label {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ---------- lessons cards ---------- */
+
+    .lessons {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .lesson {
+      display: grid;
+      grid-template-columns: 5rem 1fr;
+      gap: 1.5rem;
+      padding: 1.6rem 1.4rem;
+      background: var(--ink);
+      color: var(--paper);
+      position: relative;
+    }
+
+    .lesson .num {
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-weight: 700;
+      font-size: 3.5rem;
+      line-height: 0.9;
+      color: var(--accent-soft);
+    }
+
+    .lesson .body h3 {
+      font-family: "Fraunces", serif;
+      font-weight: 500;
+      font-size: 1.15rem;
+      margin: 0 0 0.6rem;
+      line-height: 1.25;
+    }
+
+    .lesson .body p {
+      margin: 0 0 0.6rem;
+      font-size: 0.94rem;
+      color: #d0cec3;
+      line-height: 1.55;
+    }
+
+    .lesson .body p.fix {
+      color: var(--paper);
+      border-left: 2px solid var(--accent-soft);
+      padding-left: 0.8rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.82rem;
+    }
+
+    .meta-lesson {
+      margin-top: 2.5rem;
+      padding: 1.6rem;
+      border: 1px dashed var(--rule);
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-size: 1.1rem;
+      line-height: 1.45;
+      max-width: 56ch;
+    }
+
+    /* ---------- code chips ---------- */
+
+    code {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.86em;
+      background: rgba(15, 17, 21, 0.06);
+      padding: 0.1em 0.4em;
+      border-radius: 2px;
+    }
+
+    .lesson code {
+      background: rgba(246, 243, 236, 0.12);
+      color: #f6f3ec;
+    }
+
+    /* ---------- footer ---------- */
+
+    footer.colophon {
+      margin-top: 5rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--rule);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    footer.colophon a { color: var(--ink); }
+    footer.colophon strong { color: var(--ink); font-weight: 500; }
+
+    /* ---------- responsive ---------- */
+
+    @media (max-width: 700px) {
+      .page { padding: 2rem 1.2rem 4rem; }
+      header.hero {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        align-items: start;
+      }
+      .meta { text-align: left; }
+      .chapter-head { grid-template-columns: 1fr; gap: 0.3rem; }
+      .chapter-num { font-size: 1.6rem; }
+      .lesson { grid-template-columns: 1fr; gap: 0.6rem; }
+      .lesson .num { font-size: 2.5rem; }
+      footer.colophon { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div>
+      <p class="kicker">Case study · Analytics Engineer · 2026</p>
+      <h1 class="title">FuelFlow <em>—</em><br/>une chaîne de données <em>honnête</em></h1>
+      <p class="subtitle">Comment transformer un flux open data XML mouvant en dashboards fiables, sans surcoût, sans survente, et avec une CI qui bloque vraiment le merge.</p>
+    </div>
+    <div class="meta">
+      <div>Raphaël DJAA</div>
+      <div>Juin 2026</div>
+      <div><a href="https://github.com/RaphaelDjaa71/fuelflow">github.com/<wbr>RaphaelDjaa71/<wbr>fuelflow</a></div>
+      <div><a href="https://raphaeldjaa71.github.io/fuelflow/">dbt docs publiques</a></div>
+    </div>
+  </header>
+
+  <p class="synopsis">
+    FuelFlow couvre la chaîne complète d'un Analytics Engineer&nbsp;: ingestion micro-batch horaire de l'open data des prix carburants français, médaillon GCS&nbsp;→ external tables&nbsp;→ dbt, contrats de schéma <em>enforced</em> à grain modèle, CI/CD GitHub Actions qui bloque le merge sur un test rouge, et restitution BI publique. Dual-warehouse Snowflake + BigQuery, parité prouvée, coût d'exploitation ≈ 0&nbsp;€.
+  </p>
+
+  <!-- ============== 1 · LE PROBLEME ============== -->
+
+  <section class="chapter">
+    <div class="chapter-head">
+      <span class="chapter-num">i.</span>
+      <h2 class="chapter-title">Le problème métier — pas la tech</h2>
+    </div>
+    <div class="chapter-body">
+      <p>Un comparateur de carburants, un distributeur multi-marques, ou un opérateur de flotte reçoit un flux public de l'État&nbsp;: <code>donnees.roulez-eco.fr</code>, mis à jour environ toutes les 10 minutes, couvrant les ~11 000 stations-service du territoire français et 6 carburants (Gazole, SP95, SP98, E10, E85, GPLc). Il veut exposer des indicateurs prix/géo&nbsp;: prix moyen par région, dispersion, classement des stations les moins chères, carte interactive.</p>
+      <p>Le piège est invisible. La source est un <strong>XML-ZIP en ISO-8859-1</strong> dont le format peut changer du jour au lendemain&nbsp;: la donnée publique est hors contrôle. Le flux est un <strong>snapshot complet</strong> à chaque tirage&nbsp;: ingéré naïvement, on ré-empile les mêmes prix toutes les heures et la table fact explose. Sans contrats de schéma ni tests automatisés bloquant le merge, un changement source silencieux corrompt le warehouse pendant des semaines avant qu'un dashboard cassé ne révèle le problème.</p>
+      <p>FuelFlow s'attaque à ces pièges. Le projet livre les disciplines qu'on attend d'un Analytics Engineer&nbsp;: contrats, idempotence, freshness, CI bloquante, médaillon, dbt portable cross-warehouse — tout ça sur le free tier, sans gros volume, avec une honnêteté radicale sur ce qui est fait et ce qui ne l'est pas.</p>
+    </div>
+  </section>
+
+  <!-- ============== 2 · L'ARCHITECTURE ============== -->
+
+  <section class="chapter">
+    <div class="chapter-head">
+      <span class="chapter-num">ii.</span>
+      <h2 class="chapter-title">L'architecture, en une image</h2>
+    </div>
+    <div class="chapter-body">
+      <figure class="architecture">
+        <img src="../architecture/fuelflow-architecture.png" alt="Architecture FuelFlow — diagramme du pipeline complet" />
+        <figcaption>Pipeline FuelFlow · ingestion → bronze GCS → dbt dual-warehouse → BI · CI GitHub Actions bloque le merge.</figcaption>
+      </figure>
+      <p>Toutes les heures, sur le calendrier de Paris, un Cloud Run Job déclenché par Cloud Scheduler télécharge le flux, le parse, et dépose à la fois le ZIP brut <em>et</em> un Parquet typé sur GCS. L'idempotence est gérée au niveau objet (<code>if_generation_match=0</code>)&nbsp;: rejouer le même créneau n'écrit pas un doublon.</p>
+      <p>Les deux warehouses sont alimentés en parallèle&nbsp;: <strong>Snowflake</strong> (warehouse principal du projet — c'est le signal CV, le trial tourne sur AWS eu-west-3, lecture GCS cross-cloud négligeable à ce volume) et <strong>BigQuery</strong> (cible CI et démo publique durable sur free tier). dbt construit silver, gold et trois marts d'agrégation question-driven. La parité entre les deux moteurs est mesurée à chaque build.</p>
+    </div>
+  </section>
+
+  <!-- ============== 3 · DECISIONS ============== -->
+
+  <section class="chapter">
+    <div class="chapter-head">
+      <span class="chapter-num">iii.</span>
+      <h2 class="chapter-title">Décisions techniques — un ADR par choix structurant</h2>
+    </div>
+    <div class="chapter-body">
+      <p>Sept ADR au format Nygard couvrent les sept choix qui pouvaient être pris différemment. Quelques-uns, distillés&nbsp;:</p>
+
+      <table class="decisions">
+        <thead>
+          <tr>
+            <th>Décision</th>
+            <th>Pourquoi</th>
+            <th>Conséquence assumée</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Cloud Run Job + Scheduler (pas Composer ni Airflow)</td>
+            <td>Coût idle = 0 €. Un seul DAG, pas de besoin d'orchestrateur.</td>
+            <td>Pas d'UI Airflow à montrer&nbsp;; documenté en explicit, démo via console Cloud Run.</td>
+          </tr>
+          <tr>
+            <td>Cadence horaire micro-batch (pas « temps réel »)</td>
+            <td>Le flux source est lui-même un snapshot ; les prix changent ~1–2× par jour. L'horaire capte le signal à coût quasi nul.</td>
+            <td>Pipeline incrémental dès J1 — passer à 10 min = changer le cron. Le mot « temps réel » est banni des textes.</td>
+          </tr>
+          <tr>
+            <td>Dual-warehouse Snowflake (trial) + BigQuery (free tier)</td>
+            <td>Signal CV Snowflake + démo publique durable BigQuery. dbt porte le code entre les deux.</td>
+            <td>+1,5 jour-homme de travail de portabilité (types, fonctions de date, percentiles). Bénéfice imprévu&nbsp;: le dual-warehouse a attrapé 2 bugs subtils (chapitre v).</td>
+          </tr>
+          <tr>
+            <td><code>contracts: enforced: true</code> sur le fait + 4 dims</td>
+            <td>Drift de schéma source = build qui casse, pas warehouse corrompu en silence.</td>
+            <td>Les types des colonnes sont rendus par Jinja par <code>target.type</code> — un peu plus verbeux mais réellement portable.</td>
+          </tr>
+          <tr>
+            <td>Test range prix en sévérité <em>warn</em>, pas <em>error</em></td>
+            <td>Le prix est une donnée source non contrôlée ; une promotion ou une saisie aberrante ne doit pas casser la CI.</td>
+            <td>Les tests <em>error</em> couvrent les invariants structurels (not_null, unique, contracts, relationships).</td>
+          </tr>
+          <tr>
+            <td>Key-pair JWT pour Snowflake (pas password)</td>
+            <td>MFA bloque l'auth password en CI&nbsp;; key-pair contourne proprement.</td>
+            <td>Clé privée stockée localement sous <code>.secrets/</code> (gitigné) et en base64 dans GitHub Secrets pour la CI.</td>
+          </tr>
+          <tr>
+            <td>WIF (Workload Identity Federation) pour GCP en CI — aucune clé SA</td>
+            <td>Pas de fichier JSON à rotater. OIDC tokens éphémères. Pool repo-scoped.</td>
+            <td>Configuration initiale un peu plus longue, sécurité radicalement supérieure.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============== 4 · RESULTATS ============== -->
+
+  <section class="chapter">
+    <div class="chapter-head">
+      <span class="chapter-num">iv.</span>
+      <h2 class="chapter-title">Résultats — chiffres mesurés</h2>
+    </div>
+    <div class="chapter-body">
+      <div class="metrics">
+        <div class="metric"><div class="value">93/93</div><div class="label">Tests dbt PASS (BQ)</div></div>
+        <div class="metric"><div class="value">93/93</div><div class="label">Tests dbt PASS (SF)</div></div>
+        <div class="metric"><div class="value">38 134</div><div class="label">lignes fact (4 partitions)</div></div>
+        <div class="metric"><div class="value">9 608</div><div class="label">stations distinctes</div></div>
+        <div class="metric"><div class="value">≈ 0 €</div><div class="label">Coût mensuel attendu</div></div>
+        <div class="metric"><div class="value">PR #1</div><div class="label">Gate prouvé : <code>BLOCKED → CLEAN</code></div></div>
+      </div>
+
+      <p>La parité dim_carburant (6) / dim_date (9 131) / dim_station (9 608) / dim_localisation (7 116) / fct_prix_carburant (38 134) est rigoureusement identique sur les deux warehouses. Les trois marts d'agrégation (<code>agg_dernier_prix_station_carburant</code>, <code>agg_prix_region_carburant</code>, <code>agg_classement_stations</code>) reproduisent les mêmes <em>count</em>, <em>avg</em>, <em>min</em>, <em>max</em>, <em>stddev</em> à la décimale près&nbsp;; les percentiles approximatifs (<code>APPROX_QUANTILES</code> côté BigQuery, <code>APPROX_PERCENTILE</code> côté Snowflake) divergent légèrement et c'est documenté comme attendu.</p>
+
+      <p>Une preuve a particulièrement compté&nbsp;: une PR avec un test volontairement cassé a fait virer la CI au rouge. Le <code>mergeStateStatus</code> est passé à <code>BLOCKED</code> ; la branch protection a refusé le bouton « Merge ». Le fix l'a fait rebasculer en <code>CLEAN</code>. Le projet ne se contente pas d'avoir une CI verte&nbsp;: il prouve que la CI <strong>refuse</strong> un merge cassé.</p>
+    </div>
+  </section>
+
+  <p class="pull">Une CI verte est commune. Une CI qui bloque, et qu'on prouve, c'est différent.</p>
+
+  <!-- ============== 5 · LESSONS LEARNED ============== -->
+
+  <section class="chapter">
+    <div class="chapter-head">
+      <span class="chapter-num">v.</span>
+      <h2 class="chapter-title">Trois bugs réels, racontés sans masque</h2>
+    </div>
+    <div class="chapter-body">
+      <p>Les bugs sont la matière première du projet — la doctrine dual-warehouse les a fait sortir au jour, là où un seul moteur les aurait laissés passer.</p>
+
+      <div class="lessons">
+
+        <div class="lesson">
+          <div class="num">01</div>
+          <div class="body">
+            <h3>Timestamps Parquet lus comme des secondes par Snowflake — années en 54 millions</h3>
+            <p>polars écrit <code>maj_timestamp</code> en <code>TIMESTAMP_MICROS</code> (Parquet logical type). Snowflake l'expose comme entier dans le VARIANT&nbsp;; un cast naïf <code>::TIMESTAMP_NTZ</code> l'interprète comme <em>secondes</em> depuis l'epoch et produit des années en 54 millions. <strong>Les tests <code>not_null</code> et <code>unique</code> ne voient rien</strong>&nbsp;: les valeurs sont présentes et distinctes. BigQuery, lui, respecte le logical type — d'où la divergence détectée.</p>
+            <p class="fix">Fix · <code>TO_TIMESTAMP_NTZ(VALUE:maj_timestamp::NUMBER, 6)</code> avec scale=6 (microsecondes).</p>
+          </div>
+        </div>
+
+        <div class="lesson">
+          <div class="num">02</div>
+          <div class="body">
+            <h3>Cast NTZ → TZ utilise le timezone de session — 835 fausses « lignes futures »</h3>
+            <p>Un test singulier <code>assert_no_future_maj</code> compare <code>maj_timestamp_utc</code> à <code>current_timestamp()</code>. Côté Snowflake, le cast d'un <code>TIMESTAMP_NTZ</code> en <code>TIMESTAMP_TZ</code> applique silencieusement le timezone de session — sur le trial, <code>America/Los_Angeles</code>. Résultat&nbsp;: 835 stations « publiant dans le futur ».</p>
+            <p class="fix">Fix · garder <code>TIMESTAMP_NTZ</code> en convention UTC implicite (cohérent silver) et normaliser <code>current_timestamp()</code> via <code>convert_timezone('UTC', …)</code> côté test, target-aware.</p>
+          </div>
+        </div>
+
+        <div class="lesson">
+          <div class="num">03</div>
+          <div class="body">
+            <h3>L'API <code>bq add-iam-policy-binding</code> en silent-fail</h3>
+            <p>L2 appliquait les rôles BigQuery au service account de la CI via <code>bq add-iam-policy-binding</code>. L'API est en preview et requiert allowlisting projet — sur un projet standard, elle échoue silencieusement (exit 0). Découvert seulement en L7 quand la CI a tenté de lire l'external table et s'est pris un 403. </p>
+            <p class="fix">Fix · application des grants per-dataset via le client Python BigQuery, idempotent et reproductible — script <code>infra/gcp/06_ci_sa_grants.sh</code>.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="meta-lesson">Méta-leçon&nbsp;: les tests dbt seuls ne suffisent pas. La cross-validation entre deux moteurs trouve les bugs que ni l'un ni l'autre ne signale. Le dual-warehouse n'était au départ qu'un choix de portabilité — il s'est révélé un détecteur de bugs systémique.</p>
+    </div>
+  </section>
+
+  <!-- ============== FOOTER ============== -->
+
+  <footer class="colophon">
+    <div>
+      <strong>FuelFlow</strong><br/>
+      Projet portfolio Analytics Engineer<br/>
+      Code et docs publics, licence MIT<br/>
+      <a href="https://github.com/RaphaelDjaa71/fuelflow">github.com/RaphaelDjaa71/fuelflow</a>
+    </div>
+    <div>
+      <strong>Raphaël DJAA</strong><br/>
+      Analytics Engineer · Paris<br/>
+      <a href="https://raphaeldjaa.fr">raphaeldjaa.fr</a><br/>
+      Case study, juin 2026
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
