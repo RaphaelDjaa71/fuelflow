@@ -72,9 +72,9 @@ dbt portable entre deux warehouses cloud.
 
 ## 6. Liens
 
-- **Dashboard live** (Looker Studio ← BigQuery) : *à publier en L8*
-- **dbt docs** (modèles, lineage, tests, contracts) : [raphaeldjaa71.github.io/fuelflow](https://raphaeldjaa71.github.io/fuelflow/) *(publié après le 1er push main ; workflow `dbt-docs`)*
-- **Case study Power BI** (← Snowflake) : *à publier en L8*
+- **Dashboard live** (Looker Studio ← BigQuery, mis à jour toutes les heures) : *à coller ici par Raphaël après assemblage — guide pas-à-pas dans [`docs/bi/looker-studio-guide.md`](docs/bi/looker-studio-guide.md)*
+- **dbt docs** (modèles, lineage, tests, contracts) : <https://raphaeldjaa71.github.io/fuelflow/>
+- **Case study Power BI** (← Snowflake) : *à publier après screenshots — guide dans [`docs/bi/powerbi-guide.md`](docs/bi/powerbi-guide.md)*
 
 ## 7. Avancement par lot
 
@@ -88,7 +88,7 @@ dbt portable entre deux warehouses cloud.
 | **L5** | Gold `fct_prix_carburant` + contracts enforced + tests, 63/63 PASS | ✅ |
 | **L6** | Orchestration Cloud Run Job + Cloud Scheduler horaire Europe/Paris | ✅ |
 | **L7** | CI/CD GitHub Actions WIF keyless + gate bloquant + fct incrémental + dbt docs Pages | ✅ |
-| L8 | BI (Looker Studio public + Power BI case study) | ⬜ |
+| **L8** | Marts d'agrégation question-driven (3) + guides BI Looker Studio + Power BI | ✅ |
 | L9 | Polish (README final, screenshots, case study écrit) | ⬜ |
 
 ## 8. Démarrer en local
