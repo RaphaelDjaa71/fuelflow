@@ -19,6 +19,15 @@ clean-targets:
 vars:
   source_timezone: 'Europe/Paris'
 
+# The Snowflake external table over the bronze parquet is created with
+# AUTO_REFRESH=FALSE (L2 dbt-snowflake adapter cannot configure that
+# the way BigQuery does). Without an explicit refresh, fresh GCS
+# partitions remain invisible to Snowflake and every dbt build sees
+# stale data. This hook fires only on the Snowflake target and runs a
+# REFRESH right before any model is built; BigQuery is left alone.
+on-run-start:
+  - "{% if target.type == 'snowflake' %}ALTER EXTERNAL TABLE FUELFLOW.BRONZE_EXT.EXT_PRIX_BRONZE REFRESH{% endif %}"
+
 models:
   fuelflow:
     staging:
