@@ -1,0 +1,75 @@
+name: dbt-docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pages: write
+
+concurrency:
+  group: dbt-docs
+  cancel-in-progress: true
+
+jobs:
+  generate-and-publish:
+    name: generate and publish dbt docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      DBT_PROFILES_DIR: ci
+      GCP_PROJECT_ID: fuelflow-498320
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.11"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.CI_SERVICE_ACCOUNT }}
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: dbt docs generate (bigquery)
+        working-directory: transform
+        run: uv run dbt docs generate --target bigquery --static
+
+      - name: Stage Pages site
+        run: |
+          mkdir -p _site
+          # dbt docs --static produces a single HTML file by default at
+          # target/static_index.html. If absent (older adapters), fall
+          # back to copying the full target/ directory.
+          if [ -f transform/target/static_index.html ]; then
+            cp transform/target/static_index.html _site/index.html
+          else
+            cp -R transform/target/. _site/
+            # Make sure GitHub Pages serves index.html at the root.
+            if [ ! -f _site/index.html ] && [ -f _site/manifest.json ]; then
+              cp transform/target/index.html _site/index.html 2>/dev/null || true
+            fi
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,33 @@
+fuelflow:
+  target: bigquery
+  outputs:
+
+    bigquery:
+      # In CI, google-github-actions/auth (WIF) writes a short-lived
+      # ADC credentials file and exports GOOGLE_APPLICATION_CREDENTIALS.
+      # 'method: oauth' tells dbt-bigquery to use that ADC.
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID', 'fuelflow-498320') }}"
+      dataset: fuelflow_silver
+      location: EU
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 600
+      job_retries: 1
+
+    snowflake:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      authenticator: jwt
+      # The workflow step decodes the SNOWFLAKE_PRIVATE_KEY base64
+      # secret to .secrets/snowflake_rsa_key.p8 before dbt runs. The
+      # file path is relative to the dbt project root (transform/).
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '../.secrets/snowflake_rsa_key.p8') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
+      database: FUELFLOW
+      warehouse: FUELFLOW_WH
+      schema: SILVER
+      threads: 4
+      client_session_keep_alive: false

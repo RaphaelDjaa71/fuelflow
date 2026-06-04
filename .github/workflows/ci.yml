@@ -1,0 +1,122 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# OIDC token write is required by google-github-actions/auth (WIF). All
+# other permissions are minimal (read on contents).
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ---------------------------------------------------------------
+  # The mandatory gate. Runs on every PR + push to main. A red status
+  # here, combined with the repo's branch protection on main, blocks
+  # the merge — that's the differentiator.
+  # ---------------------------------------------------------------
+  dbt-build:
+    name: dbt build (bigquery)
+    runs-on: ubuntu-latest
+    env:
+      DBT_PROFILES_DIR: ci
+      GCP_PROJECT_ID: fuelflow-498320
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.11"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Authenticate to Google Cloud (WIF, keyless)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.CI_SERVICE_ACCOUNT }}
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: dbt parse
+        working-directory: transform
+        run: uv run dbt parse --no-partial-parse
+
+      - name: dbt compile (bigquery)
+        working-directory: transform
+        run: uv run dbt compile --target bigquery
+
+      # Mandatory: any test failure here fails the job, the status
+      # check turns red, and branch protection blocks the merge.
+      - name: dbt build (bigquery)
+        working-directory: transform
+        run: uv run dbt build --target bigquery
+
+      # Source freshness is informational only. The autonomous L6
+      # pipeline keeps freshness green in production; in CI we still
+      # want to *see* the result, but a stale-source warning must not
+      # block contributor PRs.
+      - name: dbt source freshness (non-blocking)
+        working-directory: transform
+        run: uv run dbt source freshness --target bigquery
+        continue-on-error: true
+
+  # ---------------------------------------------------------------
+  # Snowflake build runs only on push to main (post-merge). PR runs
+  # would wake the trial warehouse and spend credits for marginal
+  # signal — BigQuery already enforces the same contracts and tests.
+  # ---------------------------------------------------------------
+  dbt-build-snowflake:
+    name: dbt build (snowflake)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: dbt-build
+    env:
+      DBT_PROFILES_DIR: ci
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_PRIVATE_KEY_PATH: "${{ github.workspace }}/.secrets/snowflake_rsa_key.p8"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.11"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Materialize Snowflake private key from secret
+        # Pipe is mandatory — never `echo "$secret"` (would print in
+        # debug logs). The base64 secret is consumed by stdin, decoded,
+        # written with chmod 600, and the variable is then unset.
+        env:
+          SF_KEY_B64: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+        run: |
+          mkdir -p .secrets
+          printf '%s' "$SF_KEY_B64" | base64 -d > .secrets/snowflake_rsa_key.p8
+          chmod 600 .secrets/snowflake_rsa_key.p8
+          unset SF_KEY_B64
+
+      - name: dbt deps
+        working-directory: transform
+        run: uv run dbt deps
+
+      - name: dbt build (snowflake)
+        working-directory: transform
+        run: uv run dbt build --target snowflake
