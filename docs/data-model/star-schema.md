@@ -116,23 +116,51 @@ Cette dimension a au plus 6 lignes. Matérialisation : `table` (pas `incremental
 | `annee` | INT | `NUMBER(4,0)` | `INT64` | non | `not_null` |
 | `est_jour_ouvre` | BOOLEAN | `BOOLEAN` | `BOOL` | non | `not_null` |
 
-Matérialisation : `table`. Range : 2018-01-01 → 2030-12-31 (suffisant
-pour la durée de vie portfolio).
+Matérialisation : `table`. **Range effectif L4 : 2024-01-01 → 2030-12-31**
+(2 557 jours). Le minimum de 2024 reflète l'horizon des données réelles
+captées par L1 (`maj_min` empirique ≈ 2024-05-24) : pas de raison de
+matérialiser un calendrier antérieur. Étendre la borne basse coûte une
+seule constante à modifier dans `dim_date.sql`.
+
+> **Conventions d'implémentation (L4)** : `day_of_week` est normalisé en
+> ISO (1=Lundi, 7=Dimanche) sur les deux moteurs ; les libellés FR
+> (`month_name_fr`, `day_name_fr`) sont générés via `CASE` portable —
+> pas de `FORMAT_DATE`/`TO_CHAR` dépendant de la locale.
 
 ### 3.5 `dim_localisation` (dimension)
 
+**Grain L4** : une ligne par `(cp, ville)` distinct vu dans `stg_prix`
+(≈ 7 116 sur le snapshot courant).
+
 | Colonne | Type abstrait | Snowflake | BigQuery | Nullable | Contrainte / Test |
 |---|---|---|---|---|---|
-| `localisation_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `unique`, `not_null`, PK |
-| `code_commune` | STRING(5) | `VARCHAR(5)` | `STRING` | oui | INSEE 5 chiffres quand dispo |
-| `commune` | STRING | `VARCHAR(100)` | `STRING` | oui | — |
-| `code_departement` | STRING(3) | `VARCHAR(3)` | `STRING` | oui | `length(code_departement) IN (2,3)` |
-| `departement` | STRING | `VARCHAR(100)` | `STRING` | oui | — |
-| `region` | STRING | `VARCHAR(100)` | `STRING` | oui | `accepted_values: [<13 régions FR>]` (à figer en L4) |
+| `localisation_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `unique`, `not_null`, PK (md5(`cp`, `ville`)) |
+| `cp` | STRING(5) | `VARCHAR(5)` | `STRING` | oui | code postal source (zéros de tête préservés) |
+| `ville` | STRING | `VARCHAR(100)` | `STRING` | oui | — |
+| `dept_code` | STRING(3) | `VARCHAR(3)` | `STRING` | oui | `relationships → seed_departement.dept_code` |
+| `dept_nom` | STRING | `VARCHAR(100)` | `STRING` | oui | jointure depuis `seed_departement` |
+| `region_nom` | STRING | `VARCHAR(100)` | `STRING` | oui | jointure depuis `seed_departement` (18 régions : 13 métropole + 5 DOM) |
 
-**Source des dérivations** : adresse + coordonnées de la station,
-enrichies par jointure sur un référentiel INSEE communes (à intégrer
-en L4 — option : seed dbt). Pas d'appel d'API externe au runtime.
+**Source des dérivations L4** : adresse + code postal de la station
+(les coordonnées ne sont **pas** utilisées — on évite tout géocodage).
+`dept_code` dérivé du `cp` par règles SQL portables :
+
+| Pattern `cp` | `dept_code` | Exemple |
+|---|---|---|
+| `cp` commence par `97` ou `98` | `LEFT(cp, 3)` | `97400` → `974` (La Réunion) |
+| `cp` commence par `20` et < `20200` | `2A` | `20000` → `2A` |
+| `cp` commence par `20` et ≥ `20200` | `2B` | `20200` → `2B` |
+| autres | `LEFT(cp, 2)` | `34150` → `34` |
+| `cp` null/vide | null | — |
+
+`dept_nom` et `region_nom` viennent d'un seed dbt
+(`seed_departement.csv`, 101 lignes : 96 départements métropole avec
+`2A`/`2B` + 5 DOM) — référentiel public stable, pas d'API au runtime.
+
+> **Limitation connue** : la séparation 2A/2B par tranche de CP n'est
+> pas exacte au bord de plage (un CP unique peut couvrir des communes
+> dans les deux départements). Acceptable pour un projet portfolio ;
+> documenté pour qu'un futur lecteur ne le découvre pas par surprise.
 
 ## 4. Note de portabilité Snowflake ↔ BigQuery
 
