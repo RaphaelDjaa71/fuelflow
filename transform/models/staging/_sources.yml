@@ -15,10 +15,11 @@ sources:
           External table over gs://fuelflow-498320-bronze/bronze/parquet/.
           Hive-partitioned by (dt, hh) on BigQuery; pattern-matched on
           Snowflake. The L1 worker writes new partitions every ingestion run.
-        loaded_at_field: ingestion_ts
-        freshness:
-          warn_after: {count: 90, period: minute}
-          error_after: {count: 6, period: hour}
+        config:
+          loaded_at_field: ingestion_ts
+          freshness:
+            warn_after: {count: 90, period: minute}
+            error_after: {count: 6, period: hour}
         columns:
           - name: station_id
             description: Natural key from <pdv id="...">. Stable across runs.
