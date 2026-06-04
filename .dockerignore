@@ -1,0 +1,44 @@
+# --- secrets / credentials (must never enter the image) ---
+.env
+*.env
+!.env.example
+.secrets/
+gcp-key*.json
+*service-account*.json
+
+# --- local clutter that has no business in the runtime image ---
+.git/
+.gitignore
+.venv/
+data/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# --- non-runtime project areas ---
+transform/
+docs/
+infra/
+tests/
+
+# --- dbt / build artifacts ---
+target/
+dbt_packages/
+logs/
+
+# --- editor and CI noise ---
+.vscode/
+.idea/
+.github/
+
+# --- the Dockerfile and its sibling scripts must not be re-included
+#     in the worker image
+orchestration/
+README.md
+LICENSE
+CLAUDE.md
+Makefile
+.pre-commit-config.yaml
+.python-version

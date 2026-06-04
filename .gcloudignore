@@ -1,0 +1,42 @@
+# gcloud uses .gcloudignore (NOT .dockerignore) to filter the build
+# context tarball it ships to Cloud Build. Mirror .dockerignore here so
+# that .env, .secrets/, and the dbt/docs/data trees never even reach
+# Google's build workers.
+
+.env
+*.env
+!.env.example
+.secrets/
+gcp-key*.json
+*service-account*.json
+
+.git/
+.gitignore
+.venv/
+data/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+transform/
+docs/
+infra/
+tests/
+
+target/
+dbt_packages/
+logs/
+
+.vscode/
+.idea/
+.github/
+
+# Local-only files
+README.md
+LICENSE
+CLAUDE.md
+Makefile
+.pre-commit-config.yaml
+.python-version
