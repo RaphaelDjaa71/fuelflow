@@ -1,0 +1,147 @@
+version: 2
+
+models:
+  - name: dim_carburant
+    description: |
+      One row per fuel (Gazole, SP95, SP98, E10, E85, GPLc). Sourced from
+      seed_carburant; the 6-row count is fixed by the source API.
+    columns:
+      - name: carburant_sk
+        description: Surrogate key — md5(carburant_id).
+        data_tests:
+          - not_null
+          - unique
+      - name: carburant_id
+        description: Natural key (string code 1..6).
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: ['1', '2', '3', '4', '5', '6']
+      - name: carburant_nom
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc']
+      - name: carburant_libelle_long
+        data_tests:
+          - not_null
+
+  - name: dim_date
+    description: |
+      Daily calendar table covering 2024-01-01 through 2030-12-31, with
+      French weekday and month labels, ISO week, and weekend flag.
+      Generated identically on BigQuery and Snowflake; the day_of_week
+      column is normalized to ISO (1=Monday, 7=Sunday) on both engines.
+    columns:
+      - name: date_sk
+        description: Date surrogate key as INT YYYYMMDD.
+        data_tests:
+          - not_null
+          - unique
+      - name: full_date
+        description: Calendar date.
+        data_tests:
+          - not_null
+          - unique
+      - name: year
+        data_tests:
+          - not_null
+      - name: month
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                quote: false
+      - name: day_of_week
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
+                quote: false
+      - name: month_name_fr
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Janvier
+                  - Février
+                  - Mars
+                  - Avril
+                  - Mai
+                  - Juin
+                  - Juillet
+                  - Août
+                  - Septembre
+                  - Octobre
+                  - Novembre
+                  - Décembre
+      - name: day_name_fr
+        data_tests:
+          - not_null
+      - name: iso_week
+        data_tests:
+          - not_null
+      - name: is_weekend
+        data_tests:
+          - not_null
+
+  - name: dim_localisation
+    description: |
+      One row per (cp, ville) seen in the source. dept_code is derived
+      from cp (no geocoding): DOM via left(cp,3), Corsica split lexically
+      at '20200', otherwise left(cp,2). region_nom comes from
+      seed_departement. A null cp produces a null dept_code (acceptable
+      sentinel for unknown locations).
+    columns:
+      - name: localisation_sk
+        description: Surrogate key — md5(cp, ville).
+        data_tests:
+          - not_null
+          - unique
+      - name: cp
+        description: French postal code (5 chars, leading zeros preserved as string).
+      - name: ville
+      - name: dept_code
+        description: Department code derived from cp.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('seed_departement')
+                field: dept_code
+      - name: dept_nom
+      - name: region_nom
+
+  - name: dim_station
+    description: |
+      One row per station_id (SCD type 1: latest ingestion_ts wins).
+      Reproduces the 9 608 distinct stations seen in stg_prix.
+      localisation_sk is the md5(cp, ville) surrogate, joinable to
+      dim_localisation.
+    columns:
+      - name: station_sk
+        description: Surrogate key — md5(station_id).
+        data_tests:
+          - not_null
+          - unique
+      - name: station_id
+        description: Natural station id from the source.
+        data_tests:
+          - not_null
+          - unique
+      - name: localisation_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_localisation')
+                field: localisation_sk
+      - name: cp
+      - name: ville
+      - name: latitude
+      - name: longitude
