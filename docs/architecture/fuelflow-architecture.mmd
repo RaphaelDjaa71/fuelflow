@@ -1,21 +1,32 @@
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}}}%%
 flowchart TD
-    SRC["Source open data<br/>donnees.roulez-eco.fr<br/>XML-ZIP, MAJ ~10 min"]
-    ING["Cloud Run Job (Python)<br/>déclenché par Cloud Scheduler<br/>micro-batch HORAIRE"]
-    GCS["GCS bronze<br/>XML brut + Parquet typé<br/>partitionné par date d'ingestion"]
-    SF["Snowflake (région GCP)<br/>warehouse PRINCIPAL<br/>XS + auto-suspend"]
-    BQ["BigQuery silver/gold<br/>démo LIVE durable<br/>free tier"]
-    DBT["dbt Core<br/>staging -> intermediate -> gold<br/>targets: snowflake | bigquery"]
-    TEST["dbt tests + model contracts<br/>+ freshness checks"]
-    PBI["Power BI<br/>case study (← Snowflake)"]
-    LS["Looker Studio<br/>carte/KPIs live (← BigQuery)"]
-    CI["GitHub Actions<br/>dbt build BLOQUANT (target bigquery)"]
+    SRC["Source open data<br/>donnees.roulez-eco.fr<br/>XML-ZIP, MAJ ~10 min"]:::source
+    ING["Cloud Run Job (Python)<br/>déclenché par Cloud Scheduler<br/>micro-batch HORAIRE<br/>idempotent (if_generation_match=0)"]:::compute
+    GCS["GCS bronze (EU)<br/>XML brut + Parquet typé<br/>partitionné dt=…/hh=…"]:::storage
+    SF["Snowflake (AWS eu-west-3, trial)<br/>warehouse PRINCIPAL<br/>XS + auto-suspend 60s<br/>auth key-pair JWT"]:::wh
+    BQ["BigQuery silver/gold (EU)<br/>démo LIVE durable<br/>free tier"]:::wh
+    DBT["dbt Core<br/>staging → intermediate → gold<br/>contracts enforced (fact + dims)<br/>targets: snowflake | bigquery"]:::transform
+    AGG["3 marts d'agrégation<br/>région × carburant, dernier prix,<br/>classement par région"]:::transform
+    CI["GitHub Actions<br/>dbt build BLOQUANT (target bigquery)<br/>WIF keyless<br/>gate prouvé sur PR cassée"]:::cicd
+    PAGES["dbt docs<br/>GitHub Pages<br/>(lineage public)"]:::cicd
+    PBI["Power BI (case study)<br/>← Snowflake"]:::bi
+    LS["Looker Studio (public)<br/>← BigQuery"]:::bi
 
     SRC --> ING --> GCS
     GCS --> SF
     GCS --> BQ
     SF --> DBT
     BQ --> DBT
-    DBT --> TEST
-    SF --> PBI
-    BQ --> LS
+    DBT --> AGG
     CI -. bloque le merge si un test échoue .-> DBT
+    DBT --> PAGES
+    AGG --> LS
+    AGG --> PBI
+
+    classDef source fill:#fde8c4,stroke:#cc7a00,color:#000,stroke-width:1.5px
+    classDef compute fill:#dbe4f0,stroke:#385d8a,color:#000,stroke-width:1.5px
+    classDef storage fill:#f0e0d0,stroke:#8a6435,color:#000,stroke-width:1.5px
+    classDef wh fill:#e8d4f0,stroke:#5a2c8a,color:#000,stroke-width:1.5px
+    classDef transform fill:#d0e8d0,stroke:#2b6b2b,color:#000,stroke-width:1.5px
+    classDef cicd fill:#cfe6e6,stroke:#1f5a5a,color:#000,stroke-width:2px
+    classDef bi fill:#f0d0d8,stroke:#a01e3a,color:#000,stroke-width:2px
