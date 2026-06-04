@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: int_prix_keyed
+    description: |
+      Ephemeral intermediate model. Same grain and row count as stg_prix
+      (one row per priced fuel event), with the four foreign keys
+      consumed by L5's fct_prix_carburant resolved.
+
+      date_sk reflects the *Europe/Paris* calendar day of
+      maj_timestamp_utc (not the UTC day) — the business calendar.
+
+      Because the model is ephemeral, its tests run on the compiled CTE.
+      All four foreign keys must be not_null AND resolve to the
+      corresponding dimension's surrogate key.
+    columns:
+      - name: prix_sk
+        description: Surrogate key inherited from stg_prix.
+        data_tests:
+          - not_null
+          - unique
+      - name: station_sk
+        description: FK -> dim_station.station_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_sk
+      - name: carburant_sk
+        description: FK -> dim_carburant.carburant_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_carburant')
+                field: carburant_sk
+      - name: date_sk
+        description: FK -> dim_date.date_sk (Paris calendar day).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
+      - name: localisation_sk
+        description: FK -> dim_localisation.localisation_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_localisation')
+                field: localisation_sk
+      - name: maj_timestamp_utc
+        data_tests:
+          - not_null
+      - name: prix_euro
+        data_tests:
+          - not_null
