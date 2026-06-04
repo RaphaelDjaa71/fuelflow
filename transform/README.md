@@ -2,6 +2,8 @@
 
 **Lot responsable :** L3 (staging) → L4 (intermediate) → L5 (gold + contracts).
 
+**Statut L5 :** ✅ Fait atomique `fct_prix_carburant` + **contracts `enforced: true` portables** sur les 5 modèles gold + 1 test singulier + freshness PASS sur démo + lineage PNG. 63/63 PASS sur les deux warehouses.
+
 **Statut L4 :** ✅ 4 dimensions + 1 intermediate + intégrité référentielle + parité parfaite sur les deux warehouses (72/72 PASS chacun, comptes identiques).
 
 **Statut L3 :** ✅ Staging + tests verts **sur les deux warehouses**, audits Snowflake et BigQuery identiques.
@@ -128,6 +130,75 @@ Transformations appliquées :
 | `accepted_values` | carburant_nom ∈ {Gazole, SP95, SP98, E10, E85, GPLc} | error |
 | `dbt_utils.unique_combination_of_columns` | (station_id, carburant_id, maj_timestamp_utc) | error |
 | `dbt_utils.expression_is_true` (BETWEEN 0.5 AND 3.5) | prix_euro | **warn** (donnée source, n'arrête pas la CI) |
+
+## L5 — Fait atomique + contracts enforced + lineage
+
+![dbt lineage](../docs/architecture/dbt-lineage.png)
+
+### `fct_prix_carburant` — table gold, grain (station × carburant × maj)
+
+Matérialisé en table dans `fuelflow_gold` (BQ) / `FUELFLOW.GOLD` (SF), avec
+**contract `enforced: true` portable** : la première colonne du SELECT doit
+matcher exactement le `data_type` déclaré dans le YAML, ou le build casse.
+Les `data_type` sont rendus par Jinja en fonction du `target.type` — c'est
+le mécanisme qui rend les contracts vraiment dual-warehouse :
+
+| Colonne | BigQuery | Snowflake |
+|---|---|---|
+| `prix_sk` | STRING | VARCHAR |
+| `station_sk`, `carburant_sk`, `localisation_sk` | STRING | VARCHAR |
+| `date_sk` | INT64 (matérialisé en INTEGER) | NUMBER(38,0) |
+| `prix_euro` | **NUMERIC** (≡ NUMERIC(38,9)) | **NUMBER(10,3)** |
+| `maj_timestamp_utc` | TIMESTAMP (UTC implicite) | TIMESTAMP_NTZ(9) (UTC convention) |
+| `ingestion_date` | DATE | DATE |
+
+Vérifié empiriquement : `bq show --schema fuelflow_gold.fct_prix_carburant`
+et `DESC TABLE FUELFLOW.GOLD.FCT_PRIX_CARBURANT` montrent bien
+**`prix_euro` en type décimal** (`NUMERIC` / `NUMBER(10,3)`), pas float.
+
+### Parité finale BigQuery ↔ Snowflake sur le fait
+
+```
+                       BigQuery    Snowflake
+COUNT(*)                32 666      32 666
+MIN(prix_euro)           0.699       0.699
+MAX(prix_euro)           2.89        2.89
+COUNT DISTINCT date_sk     108         108
+COUNT DISTINCT station_sk 9 608       9 608
+```
+
+### Tests (63 au total, tous PASS sur les 2 warehouses)
+
+| Test | Type | Sévérité |
+|---|---|---|
+| `unique` sur les 5 SK du fait + dims | générique | error |
+| `not_null` sur toutes les colonnes contractées | constraint + générique | error |
+| `accepted_values` sur `carburant_id`, `carburant_nom`, `month`, `day_of_week`, `month_name_fr` | générique | error |
+| 4 × `relationships` `fct → dim` | générique | **error** (intégrité du star schema) |
+| `relationships` `dim_station.localisation_sk → dim_localisation` | générique | error |
+| `relationships` `dim_localisation.dept_code → seed_departement` | générique | error |
+| `dbt_utils.expression_is_true` `prix_euro between 0.5 and 3.5` | générique | **warn** (donnée source, ne casse pas la CI) |
+| `assert_no_future_maj` (test singulier, portable) | singular | error |
+| `dbt source freshness` sur `ingestion_ts` | source | warn @ 90 min / error @ 6 h |
+
+### Test singulier — piège TZ Snowflake documenté
+
+`tests/assert_no_future_maj.sql` compare `maj_timestamp_utc` à `current_timestamp()`. Sur Snowflake `current_timestamp()` retourne un `TIMESTAMP_LTZ` dans la **session TIMEZONE** ; comparé brut à `TIMESTAMP_NTZ`-UTC, ça produit des faux positifs massifs si la session n'est pas UTC (vu en pratique : 835 "future rows" sur trial Snowflake = America/Los_Angeles).
+Fix : normaliser via `cast(convert_timezone('UTC', current_timestamp()) as timestamp_ntz)` côté Snowflake. BigQuery est trivialement UTC.
+
+### Freshness — démo PASS
+
+Après un `make ingest-gcs` frais (nouvelle partition `dt=2026-06-04/hh=00`, 32 851 lignes en bronze), `make dbt-freshness-bq` :
+```
+1 of 1 PASS freshness of roulez_eco.ext_prix_bronze  PASS  in 0.85s
+Done.
+```
+Note : freshness reste **non bloquante en CI tant que L6 n'a pas livré le scheduler horaire** (cf. `Hors scope` ci-dessous).
+
+### Hors scope L5 — assumé
+
+- **Matérialisation incrémentale du fait** : reportée à **après L6** (scheduler horaire). Sans partitions multiples réelles, l'incrémental n'est pas testable. L'ingestion GCS L1 est déjà incrémentale/idempotente au niveau objet bronze — différenciateur déjà atteint à ce niveau.
+- **Marts d'agrégation / KPI** (prix moyen région, classements) → **L8** (BI).
 
 ## Audit L4 — parité parfaite Snowflake vs BigQuery
 

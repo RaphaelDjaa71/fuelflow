@@ -41,15 +41,18 @@ Test dbt `unique(prix_sk)` doit toujours passer.
 
 ### 3.1 `fct_prix_carburant` (fact)
 
+**Contrat dbt `enforced: true` implémenté en L5** — la matérialisation
+échoue si le SELECT du modèle ne correspond pas exactement à ces types.
+
 | Colonne | Type abstrait | Snowflake | BigQuery | Nullable | Contrainte / Test |
 |---|---|---|---|---|---|
-| `prix_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `unique`, `not_null`, PK |
-| `station_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `not_null`, FK → `dim_station.station_sk` |
-| `carburant_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `not_null`, FK → `dim_carburant.carburant_sk` |
-| `date_sk` | INT | `NUMBER(8,0)` | `INT64` | non | `not_null`, FK → `dim_date.date_sk` (format YYYYMMDD) |
-| `localisation_sk` | STRING(32) | `VARCHAR(32)` | `STRING` | non | `not_null`, FK → `dim_localisation.localisation_sk` |
-| `prix_euro` | NUMERIC(10,3) | `NUMBER(10,3)` | `NUMERIC` | non | `not_null`, `prix_euro BETWEEN 0.5 AND 3.5` (test custom, plage plausible carburants FR) |
-| `maj_timestamp` | TIMESTAMP | `TIMESTAMP_NTZ` | `TIMESTAMP` | non | `not_null` |
+| `prix_sk` | STRING(32) | `VARCHAR` | `STRING` | non | `unique`, `not_null`, PK |
+| `station_sk` | STRING(32) | `VARCHAR` | `STRING` | non | `not_null`, FK → `dim_station.station_sk` |
+| `carburant_sk` | STRING(32) | `VARCHAR` | `STRING` | non | `not_null`, FK → `dim_carburant.carburant_sk` |
+| `date_sk` | INT | `NUMBER` | `INT64` | non | `not_null`, FK → `dim_date.date_sk` (format YYYYMMDD, jour Paris) |
+| `localisation_sk` | STRING(32) | `VARCHAR` | `STRING` | non | `not_null`, FK → `dim_localisation.localisation_sk` |
+| `prix_euro` | NUMERIC(10,3) | `NUMBER(10,3)` | `NUMERIC` | non | `not_null`, `prix_euro BETWEEN 0.5 AND 3.5` (sévérité **warn**) |
+| `maj_timestamp_utc` | TIMESTAMP UTC | `TIMESTAMP_NTZ` (UTC convention) | `TIMESTAMP` (UTC implicite) | non | `not_null` |
 | `ingestion_date` | DATE | `DATE` | `DATE` | non | `not_null` |
 
 > **Note d'unité (audit L1)** : la source `donnees.roulez-eco.fr` expose
@@ -116,11 +119,11 @@ Cette dimension a au plus 6 lignes. Matérialisation : `table` (pas `incremental
 | `annee` | INT | `NUMBER(4,0)` | `INT64` | non | `not_null` |
 | `est_jour_ouvre` | BOOLEAN | `BOOLEAN` | `BOOL` | non | `not_null` |
 
-Matérialisation : `table`. **Range effectif L4 : 2024-01-01 → 2030-12-31**
-(2 557 jours). Le minimum de 2024 reflète l'horizon des données réelles
-captées par L1 (`maj_min` empirique ≈ 2024-05-24) : pas de raison de
-matérialiser un calendrier antérieur. Étendre la borne basse coûte une
-seule constante à modifier dans `dim_date.sql`.
+Matérialisation : `table`. **Range effectif L5 : 2007-01-01 → 2031-12-31**
+(9 131 jours). La borne basse a été élargie en L5 pour blinder le test
+`relationships` `fct.date_sk → dim_date` contre une vieille `maj` source
+sortie d'une station dormante (le `maj_min` empirique courant est ~2024
+mais un futur snapshot pourrait surfacer plus vieux).
 
 > **Conventions d'implémentation (L4)** : `day_of_week` est normalisé en
 > ISO (1=Lundi, 7=Dimanche) sur les deux moteurs ; les libellés FR
