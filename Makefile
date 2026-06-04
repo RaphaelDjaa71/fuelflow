@@ -45,6 +45,9 @@ dbt-freshness-bq:
 dbt-docs-bq:
 	cd transform && DBT_PROFILES_DIR=. uv run dbt docs generate --target bigquery
 
+dbt-lineage:
+	npx -y @mermaid-js/mermaid-cli -i docs/architecture/dbt-lineage.mmd -o docs/architecture/dbt-lineage.png -b transparent
+
 diagram:
 	npx -y @mermaid-js/mermaid-cli -i docs/architecture/fuelflow-architecture.mmd -o docs/architecture/fuelflow-architecture.png -b transparent
 

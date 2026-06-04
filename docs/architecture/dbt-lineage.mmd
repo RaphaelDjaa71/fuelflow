@@ -1,0 +1,48 @@
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}}}%%
+flowchart LR
+    subgraph SRC["Bronze (GCS Parquet → external table)"]
+        S1["source: roulez_eco.ext_prix_bronze"]:::source
+    end
+
+    subgraph SEEDS["Seeds (gold)"]
+        SD1["seed_carburant<br/>(6 rows)"]:::seed
+        SD2["seed_departement<br/>(101 rows, FR + DOM)"]:::seed
+    end
+
+    subgraph SILVER["Silver layer"]
+        STG["stg_prix<br/>view, Paris→UTC, dedup"]:::staging
+    end
+
+    subgraph INT["Intermediate (ephemeral)"]
+        IK["int_prix_keyed<br/>FK resolution, date_sk Paris"]:::intermediate
+    end
+
+    subgraph GOLD["Gold (contracts enforced)"]
+        DC["dim_carburant"]:::dim
+        DD["dim_date<br/>2007-01-01 → 2031-12-31"]:::dim
+        DL["dim_localisation<br/>(cp × ville), dept from cp"]:::dim
+        DS["dim_station<br/>SCD type 1"]:::dim
+        FCT["fct_prix_carburant<br/>NUMERIC(10,3) on prix_euro"]:::fact
+    end
+
+    S1 --> STG
+    STG --> IK
+    STG --> DL
+    STG --> DS
+    SD1 --> DC
+    SD2 --> DL
+    IK --> FCT
+
+    DC -. relationships .-> FCT
+    DD -. relationships .-> FCT
+    DL -. relationships .-> FCT
+    DS -. relationships .-> FCT
+    DL -. relationships .-> DS
+    SD2 -. relationships .-> DL
+
+    classDef source fill:#fde8c4,stroke:#cc7a00,color:#000
+    classDef seed fill:#e8f0d8,stroke:#5a8c1c,color:#000
+    classDef staging fill:#dbe4f0,stroke:#385d8a,color:#000
+    classDef intermediate fill:#f0e0d0,stroke:#8a6435,color:#000,stroke-dasharray: 4 2
+    classDef dim fill:#d0e8d0,stroke:#2b6b2b,color:#000
+    classDef fact fill:#f0d0d8,stroke:#a01e3a,color:#000,stroke-width:3px
