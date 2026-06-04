@@ -1,71 +1,82 @@
 version: 2
 
 models:
+
+  # ---------------------------------------------------------------------
+  # dim_carburant
+  # ---------------------------------------------------------------------
   - name: dim_carburant
     description: |
       One row per fuel (Gazole, SP95, SP98, E10, E85, GPLc). Sourced from
       seed_carburant; the 6-row count is fixed by the source API.
+    config:
+      contract:
+        enforced: true
     columns:
       - name: carburant_sk
         description: Surrogate key — md5(carburant_id).
-        data_tests:
-          - not_null
-          - unique
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests: [unique]
       - name: carburant_id
         description: Natural key (string code 1..6).
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
         data_tests:
-          - not_null
           - unique
           - accepted_values:
               arguments:
                 values: ['1', '2', '3', '4', '5', '6']
       - name: carburant_nom
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
         data_tests:
-          - not_null
           - accepted_values:
               arguments:
                 values: ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc']
       - name: carburant_libelle_long
-        data_tests:
-          - not_null
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
 
+  # ---------------------------------------------------------------------
+  # dim_date
+  # ---------------------------------------------------------------------
   - name: dim_date
     description: |
-      Daily calendar table covering 2024-01-01 through 2030-12-31, with
+      Daily calendar table covering 2007-01-01 through 2031-12-31, with
       French weekday and month labels, ISO week, and weekend flag.
       Generated identically on BigQuery and Snowflake; the day_of_week
       column is normalized to ISO (1=Monday, 7=Sunday) on both engines.
+    config:
+      contract:
+        enforced: true
     columns:
       - name: date_sk
         description: Date surrogate key as INT YYYYMMDD.
-        data_tests:
-          - not_null
-          - unique
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+        constraints: [{type: not_null}]
+        data_tests: [unique]
       - name: full_date
-        description: Calendar date.
-        data_tests:
-          - not_null
-          - unique
+        data_type: DATE
+        constraints: [{type: not_null}]
+        data_tests: [unique]
       - name: year
-        data_tests:
-          - not_null
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+        constraints: [{type: not_null}]
+      - name: quarter
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
       - name: month
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+        constraints: [{type: not_null}]
         data_tests:
-          - not_null
           - accepted_values:
               arguments:
                 values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
                 quote: false
-      - name: day_of_week
-        data_tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: [1, 2, 3, 4, 5, 6, 7]
-                quote: false
       - name: month_name_fr
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
         data_tests:
-          - not_null
           - accepted_values:
               arguments:
                 values:
@@ -81,16 +92,29 @@ models:
                   - Octobre
                   - Novembre
                   - Décembre
+      - name: day_of_month
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+      - name: day_of_week
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
+                quote: false
       - name: day_name_fr
-        data_tests:
-          - not_null
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
       - name: iso_week
-        data_tests:
-          - not_null
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+        constraints: [{type: not_null}]
       - name: is_weekend
-        data_tests:
-          - not_null
+        data_type: "{{ 'BOOL' if target.type == 'bigquery' else 'BOOLEAN' }}"
+        constraints: [{type: not_null}]
 
+  # ---------------------------------------------------------------------
+  # dim_localisation
+  # ---------------------------------------------------------------------
   - name: dim_localisation
     description: |
       One row per (cp, ville) seen in the source. dept_code is derived
@@ -98,50 +122,150 @@ models:
       at '20200', otherwise left(cp,2). region_nom comes from
       seed_departement. A null cp produces a null dept_code (acceptable
       sentinel for unknown locations).
+    config:
+      contract:
+        enforced: true
     columns:
       - name: localisation_sk
         description: Surrogate key — md5(cp, ville).
-        data_tests:
-          - not_null
-          - unique
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests: [unique]
       - name: cp
-        description: French postal code (5 chars, leading zeros preserved as string).
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
       - name: ville
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
       - name: dept_code
-        description: Department code derived from cp.
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
         data_tests:
           - relationships:
               arguments:
                 to: ref('seed_departement')
                 field: dept_code
       - name: dept_nom
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
       - name: region_nom
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
 
+  # ---------------------------------------------------------------------
+  # dim_station
+  # ---------------------------------------------------------------------
   - name: dim_station
     description: |
       One row per station_id (SCD type 1: latest ingestion_ts wins).
       Reproduces the 9 608 distinct stations seen in stg_prix.
       localisation_sk is the md5(cp, ville) surrogate, joinable to
       dim_localisation.
+    config:
+      contract:
+        enforced: true
     columns:
       - name: station_sk
         description: Surrogate key — md5(station_id).
-        data_tests:
-          - not_null
-          - unique
-      - name: station_id
-        description: Natural station id from the source.
-        data_tests:
-          - not_null
-          - unique
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests: [unique]
       - name: localisation_sk
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
         data_tests:
-          - not_null
           - relationships:
               arguments:
                 to: ref('dim_localisation')
                 field: localisation_sk
+      - name: station_id
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests: [unique]
       - name: cp
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
       - name: ville
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+      - name: adresse
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+      - name: pop
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
       - name: latitude
+        data_type: "{{ 'FLOAT64' if target.type == 'bigquery' else 'FLOAT' }}"
       - name: longitude
+        data_type: "{{ 'FLOAT64' if target.type == 'bigquery' else 'FLOAT' }}"
+
+  # ---------------------------------------------------------------------
+  # fct_prix_carburant — the atomic fact, enforced contract
+  # ---------------------------------------------------------------------
+  - name: fct_prix_carburant
+    description: |
+      Atomic price fact at the (station, fuel, source maj_timestamp) grain.
+      One row per priced fuel event captured in the source. Every foreign
+      key resolves to its dimension (relationships tests are error-severity).
+      prix_euro is stored as NUMERIC(10,3) on both warehouses — money is
+      decimal, not float.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: prix_sk
+        description: Primary key — md5(station_id, carburant_id, maj_timestamp_utc).
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests: [unique]
+      - name: station_sk
+        description: FK -> dim_station.station_sk
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_sk
+      - name: carburant_sk
+        description: FK -> dim_carburant.carburant_sk
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_carburant')
+                field: carburant_sk
+      - name: date_sk
+        description: FK -> dim_date.date_sk (Paris calendar day of maj).
+        data_type: "{{ 'INT64' if target.type == 'bigquery' else 'NUMBER' }}"
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
+      - name: localisation_sk
+        description: FK -> dim_localisation.localisation_sk
+        data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_localisation')
+                field: localisation_sk
+      - name: prix_euro
+        description: Posted price in decimal euros (NUMERIC(10,3)).
+        data_type: "{{ 'NUMERIC' if target.type == 'bigquery' else 'NUMBER(10,3)' }}"
+        constraints: [{type: not_null}]
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0.5 and 3.5"
+              config:
+                severity: warn
+      - name: maj_timestamp_utc
+        description: |
+          Source publication timestamp, stored as a UTC instant.
+          BigQuery: TIMESTAMP (which always carries UTC semantics).
+          Snowflake: TIMESTAMP_NTZ holding the UTC wall-clock — same
+          convention as the silver layer; we do not cast to TIMESTAMP_TZ
+          because the NTZ -> TZ cast silently uses the session TIMEZONE
+          and shifts wall clocks by hours when the session is not UTC.
+        data_type: "{{ 'TIMESTAMP' if target.type == 'bigquery' else 'TIMESTAMP_NTZ' }}"
+        constraints: [{type: not_null}]
+      - name: ingestion_date
+        description: UTC date the L1 worker captured the row.
+        data_type: DATE
+        constraints: [{type: not_null}]
