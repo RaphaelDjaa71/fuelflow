@@ -1,5 +1,8 @@
 # FuelFlow — pipeline analytique sur les prix des carburants en France
 
+[![ci](https://github.com/RaphaelDjaa71/fuelflow/actions/workflows/ci.yml/badge.svg)](https://github.com/RaphaelDjaa71/fuelflow/actions/workflows/ci.yml)
+[![dbt-docs](https://github.com/RaphaelDjaa71/fuelflow/actions/workflows/dbt-docs.yml/badge.svg)](https://raphaeldjaa71.github.io/fuelflow/)
+
 ## 1. Le problème métier
 
 Imaginez un comparateur de carburants, un distributeur multi-marques, ou
@@ -70,7 +73,7 @@ dbt portable entre deux warehouses cloud.
 ## 6. Liens
 
 - **Dashboard live** (Looker Studio ← BigQuery) : *à publier en L8*
-- **dbt docs** (modèles, lineage, tests, contracts) : *à publier en L7*
+- **dbt docs** (modèles, lineage, tests, contracts) : [raphaeldjaa71.github.io/fuelflow](https://raphaeldjaa71.github.io/fuelflow/) *(publié après le 1er push main ; workflow `dbt-docs`)*
 - **Case study Power BI** (← Snowflake) : *à publier en L8*
 
 ## 7. Avancement par lot
@@ -84,7 +87,7 @@ dbt portable entre deux warehouses cloud.
 | **L4** | Intermediate + 4 dims + intégrité référentielle, 72/72 PASS chacun | ✅ |
 | **L5** | Gold `fct_prix_carburant` + contracts enforced + tests, 63/63 PASS | ✅ |
 | **L6** | Orchestration Cloud Run Job + Cloud Scheduler horaire Europe/Paris | ✅ |
-| L7 | CI/CD GitHub Actions (dbt build bloquant + key-pair SF), fct incrémental | ⬜ |
+| **L7** | CI/CD GitHub Actions WIF keyless + gate bloquant + fct incrémental + dbt docs Pages | ✅ |
 | L8 | BI (Looker Studio public + Power BI case study) | ⬜ |
 | L9 | Polish (README final, screenshots, case study écrit) | ⬜ |
 
