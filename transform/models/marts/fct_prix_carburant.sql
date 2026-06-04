@@ -1,5 +1,8 @@
 {{ config(
-    materialized='table',
+    materialized='incremental',
+    unique_key='prix_sk',
+    incremental_strategy='merge',
+    on_schema_change='fail',
     contract={'enforced': true}
 ) }}
 
@@ -25,8 +28,30 @@
     - ingestion_date: DATE on both, derived from ingestion_ts.
 #}
 
+{%- if is_incremental() -%}
+    {%- set max_ingestion_ts_query -%}
+        select coalesce(max(ingestion_ts), cast('1900-01-01' as {{ dbt.type_timestamp() }})) from {{ this }}
+    {%- endset -%}
+    {%- set max_ingestion_ts_result = run_query(max_ingestion_ts_query) -%}
+    {%- if execute -%}
+        {%- set max_ingestion_ts = max_ingestion_ts_result.columns[0].values()[0] -%}
+    {%- else -%}
+        {%- set max_ingestion_ts = '1900-01-01 00:00:00' -%}
+    {%- endif -%}
+{%- endif -%}
+
 with src as (
     select * from {{ ref('int_prix_keyed') }}
+    {# Strict watermark: only rows captured *after* the last
+       ingestion_ts already in the fact are reprocessed. The literal
+       is resolved at compile time via run_query so the WHERE clause
+       stays uncorrelated (Snowflake refuses correlated aggregates in
+       WHERE). incremental_strategy=merge on unique_key=prix_sk is the
+       second line of defense — silver-layer dedup already enforces
+       natural-key uniqueness. #}
+    {% if is_incremental() %}
+        where ingestion_ts > cast('{{ max_ingestion_ts }}' as {{ dbt.type_timestamp() }})
+    {% endif %}
 )
 
 select
@@ -38,6 +63,7 @@ select
     {% if target.type == 'bigquery' %}
     cast(prix_euro as numeric) as prix_euro,
     cast(maj_timestamp_utc as timestamp) as maj_timestamp_utc,
+    cast(ingestion_ts as timestamp) as ingestion_ts,
     cast(date(ingestion_ts) as date) as ingestion_date
     {% elif target.type == 'snowflake' %}
     cast(prix_euro as number(10,3)) as prix_euro,
@@ -48,6 +74,7 @@ select
        *_utc columns store UTC instants in TIMESTAMP_NTZ; this keeps
        the gold layer consistent with that. #}
     cast(maj_timestamp_utc as timestamp_ntz) as maj_timestamp_utc,
+    cast(ingestion_ts as timestamp_ntz) as ingestion_ts,
     cast(to_date(ingestion_ts) as date) as ingestion_date
     {% endif %}
 from src

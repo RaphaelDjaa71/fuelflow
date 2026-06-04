@@ -265,6 +265,14 @@ models:
           and shifts wall clocks by hours when the session is not UTC.
         data_type: "{{ 'TIMESTAMP' if target.type == 'bigquery' else 'TIMESTAMP_NTZ' }}"
         constraints: [{type: not_null}]
+      - name: ingestion_ts
+        description: |
+          UTC timestamp at which the L1 worker captured the row.
+          Used as the strict watermark by the incremental fct build
+          (only rows with ingestion_ts > the table's current max are
+          merged on a non-full-refresh run).
+        data_type: "{{ 'TIMESTAMP' if target.type == 'bigquery' else 'TIMESTAMP_NTZ' }}"
+        constraints: [{type: not_null}]
       - name: ingestion_date
         description: UTC date the L1 worker captured the row.
         data_type: DATE
