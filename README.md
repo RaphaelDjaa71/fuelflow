@@ -78,13 +78,13 @@ dbt portable entre deux warehouses cloud.
 | Lot | Sujet | Statut |
 |---|---|---|
 | **L0** | Initialisation, ADR, design du modèle, diagramme, outillage | ✅ |
-| L1 | Ingestion Python (worker XML→Parquet, idempotence, retry, logs structurés) | ⬜ |
-| L2 | Infra cloud (buckets GCS, datasets BQ, base Snowflake, secrets) | ⬜ |
-| L3 | Projet dbt initial (sources + staging) | ⬜ |
-| L4 | Intermediate (nettoyage, jointures, dim référentielle communes INSEE) | ⬜ |
-| L5 | Gold (star schema + model contracts + tests) | ⬜ |
-| L6 | Orchestration (Cloud Run Job + Cloud Scheduler) | ⬜ |
-| L7 | CI/CD GitHub Actions (dbt build bloquant + freshness) | ⬜ |
+| **L1** | Ingestion Python (worker XML→Parquet, idempotence, retry, logs JSON) | ✅ |
+| **L2** | Infra cloud (bucket GCS EU, datasets BQ, Snowflake DB/WH/integration) | ✅ |
+| **L3** | dbt staging dual-target Snowflake + BigQuery, 13/13 PASS chacun | ✅ |
+| **L4** | Intermediate + 4 dims + intégrité référentielle, 72/72 PASS chacun | ✅ |
+| **L5** | Gold `fct_prix_carburant` + contracts enforced + tests, 63/63 PASS | ✅ |
+| **L6** | Orchestration Cloud Run Job + Cloud Scheduler horaire Europe/Paris | ✅ |
+| L7 | CI/CD GitHub Actions (dbt build bloquant + key-pair SF), fct incrémental | ⬜ |
 | L8 | BI (Looker Studio public + Power BI case study) | ⬜ |
 | L9 | Polish (README final, screenshots, case study écrit) | ⬜ |
 
