@@ -1,12 +1,16 @@
 {{ config(materialized='table') }}
 
-{# 2024-01-01 inclusive to 2031-01-01 exclusive (covers 2024 through
-   2030, matching the project's expected analytical horizon). #}
+{# 2007-01-01 inclusive to 2032-01-01 exclusive (covers 2007 through
+   2031). The lower bound is intentionally generous so the fct ->
+   dim_date relationships test cannot fail because of an unusually
+   stale <prix maj=...> from a station that has not updated in years.
+   Reference: maj_min seen in the live feed is 2024-05-24 today, but
+   future snapshots may surface older rows. #}
 with date_spine as (
     {{ dbt_utils.date_spine(
         datepart='day',
-        start_date="cast('2024-01-01' as date)",
-        end_date="cast('2031-01-01' as date)"
+        start_date="cast('2007-01-01' as date)",
+        end_date="cast('2032-01-01' as date)"
     ) }}
 ),
 
