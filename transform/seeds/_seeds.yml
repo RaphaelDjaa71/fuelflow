@@ -1,0 +1,26 @@
+version: 2
+
+seeds:
+  - name: seed_carburant
+    description: Fuel reference table — 6 rows, one per fuel.
+    columns:
+      - name: carburant_id
+        data_tests: [not_null, unique]
+      - name: carburant_nom
+        data_tests: [not_null, unique]
+      - name: carburant_libelle_long
+        data_tests: [not_null]
+
+  - name: seed_departement
+    description: |
+      French department reference table — 101 rows (96 metropolitan
+      including 2A/2B + 5 overseas DOM). Region names follow the post-2016
+      official 13-region metropolitan layout plus the DOM single-department
+      regions (Guadeloupe, Martinique, Guyane, La Réunion, Mayotte).
+    columns:
+      - name: dept_code
+        data_tests: [not_null, unique]
+      - name: dept_nom
+        data_tests: [not_null, unique]
+      - name: region_nom
+        data_tests: [not_null]
