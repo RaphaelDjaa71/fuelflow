@@ -277,3 +277,111 @@ models:
         description: UTC date the L1 worker captured the row.
         data_type: DATE
         constraints: [{type: not_null}]
+
+  # ---------------------------------------------------------------------
+  # Aggregation marts (L8) — gold layer, table-materialized.
+  # Contract enforcement is OFF here so percentile expressions can stay
+  # target-aware without locking the model to a specific type per engine.
+  # ---------------------------------------------------------------------
+
+  - name: agg_dernier_prix_station_carburant
+    description: |
+      One row per (station, fuel) carrying the most recent prix_euro,
+      its maj_timestamp_utc, and the joined dim attributes
+      (lat/long/ville/dept/region). Feeds the Looker Studio bubble map
+      and is the upstream for the two regional marts.
+    columns:
+      - name: station_sk
+        data_tests: [not_null]
+      - name: carburant_sk
+        data_tests: [not_null]
+      - name: carburant_nom
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc']
+      - name: prix_euro
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0.5 and 3.5"
+              config:
+                severity: warn
+      - name: maj_timestamp_utc
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [station_sk, carburant_sk]
+
+  - name: agg_prix_region_carburant
+    description: |
+      Aggregates the 'latest price per station+fuel' table to the
+      (region, carburant) grain. count_stations / prix_moyen / min /
+      max / stddev are exact and identical across BigQuery and
+      Snowflake. The three percentile columns (p25/median/p75) use
+      APPROX_QUANTILES (BQ) / APPROX_PERCENTILE (SF); small numeric
+      differences between the two engines on these columns are
+      expected — they are approximate by design.
+    columns:
+      - name: region_nom
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('seed_departement')
+                field: region_nom
+      - name: carburant_nom
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc']
+      - name: count_stations
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+      - name: prix_moyen
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between 0.5 and 3.5"
+              config:
+                severity: warn
+      - name: prix_min
+        data_tests: [not_null]
+      - name: prix_max
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [region_nom, carburant_nom]
+
+  - name: agg_classement_stations
+    description: |
+      Same grain as agg_dernier_prix_station_carburant but enriched
+      with rang_moins_cher_region / rang_plus_cher_region and the
+      signed delta vs the regional mean. Powers the "top N cheapest
+      stations by region/fuel" leaderboards in the dashboard.
+    columns:
+      - name: station_sk
+        data_tests: [not_null]
+      - name: region_nom
+        data_tests: [not_null]
+      - name: carburant_nom
+        data_tests: [not_null]
+      - name: prix_euro
+        data_tests: [not_null]
+      - name: rang_moins_cher_region
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 1"
+      - name: ecart_prix_vs_moyenne_region
+        data_tests: [not_null]
