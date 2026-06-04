@@ -23,4 +23,26 @@ models:
   fuelflow:
     staging:
       +materialized: view
+      +schema: silver
       +tags: ["staging"]
+    intermediate:
+      +materialized: ephemeral
+      +tags: ["intermediate"]
+    marts:
+      +materialized: table
+      +schema: gold
+      +tags: ["marts"]
+
+seeds:
+  fuelflow:
+    +schema: gold
+    seed_carburant:
+      +column_types:
+        carburant_id: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        carburant_nom: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        carburant_libelle_long: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+    seed_departement:
+      +column_types:
+        dept_code: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        dept_nom: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
+        region_nom: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
