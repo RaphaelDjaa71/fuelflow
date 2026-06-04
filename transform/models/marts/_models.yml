@@ -31,13 +31,9 @@ models:
         data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
         constraints: [{type: not_null}]
         data_tests:
-          # DELIBERATELY BROKEN to prove the CI gate blocks the merge.
-          # Removing 'Gazole' from the accepted list (the most common
-          # fuel, 9 542 rows in the snapshot) makes the accepted_values
-          # test fail loudly on dim_carburant.
           - accepted_values:
               arguments:
-                values: ['SP95', 'SP98', 'E10', 'E85', 'GPLc']
+                values: ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc']
       - name: carburant_libelle_long
         data_type: "{{ 'STRING' if target.type == 'bigquery' else 'VARCHAR' }}"
         constraints: [{type: not_null}]
